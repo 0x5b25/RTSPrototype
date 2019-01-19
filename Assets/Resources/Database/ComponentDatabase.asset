@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: efa7536a525cfe74eb9224af527bc744, type: 3}
+  m_Name: ComponentDatabase
+  m_EditorClassIdentifier: 
+  pages:
+  - pageName: Sec
+    DBIndex: 0
+    componentList:
+    - ComponentName: 
+      prefab: {fileID: 0}
+  - pageName: Xov
+    DBIndex: 0
+    componentList:
+    - ComponentName: 
+      prefab: {fileID: 0}
+  - pageName: Rex
+    DBIndex: 0
+    componentList:
+    - ComponentName: 
+      prefab: {fileID: 0}
+  - pageName: Consecutive
+    DBIndex: 0
+    componentList:
+    - ComponentName: 
+      prefab: {fileID: 0}
+  - pageName: Wix
+    DBIndex: 0
+    componentList:
+    - ComponentName: 
+      prefab: {fileID: 0}
+  - pageName: ren
+    DBIndex: 0
+    componentList: []
+  - pageName: wwww
+    DBIndex: 0
+    componentList: []
+  - pageName: 7777777
+    DBIndex: 0
+    componentList: []
+  - pageName: sdjfnaiudfdsaf
+    DBIndex: 0
+    componentList: []
