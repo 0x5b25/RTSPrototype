@@ -64,7 +64,7 @@ namespace RTS.Subsys
             return asset;
         }
 
-        void CreateResourceFolder(string relativePath)
+        public static void CreateResourceFolder(string relativePath)
         {
             relativePath = relativePath.Replace("\\", "/");
             relativePath = relativePath.Trim('/');
@@ -91,7 +91,7 @@ namespace RTS.Subsys
             }
         }
 
-        void CreateResourceFolder()
+        public static void CreateResourceFolder()
         {
             if (!AssetDatabase.IsValidFolder("Assets/Resources"))
             {

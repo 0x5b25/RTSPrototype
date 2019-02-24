@@ -36,7 +36,7 @@ namespace RTS.Editor
                 root = new EVerticalLayout();
 
                 root.children.Add(contentList);
-                root.children.Add(new EButton().RelativeSize(false).Callback(AddNewEvent).Height(40) + new EText().Content("Add new event"));
+                root.children.Add(new EButton().RelativeSize(false).OnClicked((EButton b) => AddNewEvent()).Height(40) + new EText().Content("Add new event"));
             }
             root.OnConstruct(this);
         }
@@ -123,12 +123,12 @@ namespace RTS.Editor
             this.index = index;
             this.parent = parent;
             indexText = new EText().Content(index.ToString()).RelativeSize(false).Width(20);
-            nameField = new ETextInputField().RelativeSize(true).Callback((string val)=> { parent.cfg.events[this.index] = val;nameText.Content(val); });
+            nameField = new ETextInputField().RelativeSize(true).OnInputUpdate((ETextInputField f,string val)=> { parent.cfg.events[this.index] = val;nameText.Content(val); });
             nameText = new EText().Content(parent.cfg.events[index]).RelativeSize(true);
 
-            editButton = new EButton().RelativeSize(false).Width(80).Callback(()=> { parent.BeginEdit(index); }) + new EText().Content("edit");
-            editFinishButton = new EButton().RelativeSize(false).Width(50).Callback(() => { parent.FinishEdit(); }) + new EText().Content("finish");
-            deleteButton = new EButton().RelativeSize(false).Width(30).Callback(()=> { parent.RemoveEvent(index); }) + new EText().Content("x");
+            editButton = new EButton().RelativeSize(false).Width(80).OnClicked((EButton b)=> { parent.BeginEdit(index); }) + new EText().Content("edit");
+            editFinishButton = new EButton().RelativeSize(false).Width(50).OnClicked((EButton b) => { parent.FinishEdit(); }) + new EText().Content("finish");
+            deleteButton = new EButton().RelativeSize(false).Width(30).OnClicked((EButton b) => { parent.RemoveEvent(index); }) + new EText().Content("x");
 
             children.Add(new EHorizontalLayout() + indexText + nameText + editButton);
             children.Add(new EHorizontalLayout() + indexText + nameField + editFinishButton + deleteButton);

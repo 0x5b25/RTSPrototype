@@ -16,27 +16,32 @@ MonoBehaviour:
   - pageName: Sec
     DBIndex: 0
     componentList:
-    - ComponentName: 
+    - type: 2
+      name: ffffffff
       prefab: {fileID: 0}
   - pageName: Xov
     DBIndex: 0
     componentList:
-    - ComponentName: 
+    - type: 0
+      name: 
       prefab: {fileID: 0}
   - pageName: Rex
     DBIndex: 0
     componentList:
-    - ComponentName: 
+    - type: 0
+      name: 
       prefab: {fileID: 0}
   - pageName: Consecutive
     DBIndex: 0
     componentList:
-    - ComponentName: 
+    - type: 0
+      name: 
       prefab: {fileID: 0}
   - pageName: Wix
     DBIndex: 0
     componentList:
-    - ComponentName: 
+    - type: 0
+      name: 
       prefab: {fileID: 0}
   - pageName: ren
     DBIndex: 0
@@ -49,4 +54,7 @@ MonoBehaviour:
     componentList: []
   - pageName: sdjfnaiudfdsaf
     DBIndex: 0
-    componentList: []
+    componentList:
+    - type: 1
+      name: sadfasdfasdf
+      prefab: {fileID: 0}

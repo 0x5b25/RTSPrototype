@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -7,23 +8,30 @@ namespace RTS
 {
     public abstract class EditorUIBase
     {
-        internal Rect position = new Rect(0, 0, 50, 20);
+        internal virtual Rect position { get; set; } = new Rect(0, 0, 50, 20);
         internal bool relativeSize = false, relativePos = false;
         internal int ctrlID;
-        internal EditorWindow window;
+        //internal EditorWindow window;
+
+        protected string tag = null;
+
+        public EditorUIBase parent;
         public bool isEnabled = true;
 
-        public virtual void OnConstruct(EditorWindow window) { ctrlID = GetHashCode(); this.window = window; }
+        public virtual void OnConstruct(EditorWindow window) { ctrlID = GetHashCode(); }
         public virtual void OnDisable(EditorWindow window) { }
         public abstract void OnDrawGUI(Rect position, EditorWindow window);
 
-        
+        public virtual void FixInheritance(EditorUIBase parent) { this.parent = parent; }
+
+        public abstract T GetElementByTag<T>(string tag) where T : EditorUIBase;
+        public abstract T[] GetAllElementsByTag<T>(string tag) where T : EditorUIBase;
     }
 
     public abstract class EditorUI<T>:EditorUIBase where T : class
     { 
-        public T Width(float w) { position.width = w; return this as T; }
-        public T Height(float h) { position.height = h; return this as T; }
+        public T Width(float w) { position = new Rect(position.position,new Vector2(w,position.height)); return this as T; }
+        public T Height(float h) { position = new Rect(position.position, new Vector2(position.width, h)); return this as T; }
         public T RelativeSize(bool isRelative) { this.relativeSize = isRelative; return this as T; }
         public T RelativePosition(bool isRelative) { this.relativePos = isRelative; return this as T; }
 
@@ -71,12 +79,31 @@ namespace RTS
                         if (isMouseOver || isMouseDown)
                         {
                             GUIUtility.hotControl = 0;
-                            clickCallback?.Invoke();
+                            if (isMouseOver && isMouseDown)
+                                clickCallback?.Invoke();
                             window.Repaint();
                         }
                     }
                     break;
             }
+        }
+
+        public string GetTag() { return tag; }
+        public T SetTag(string val) { tag = val;return this as T; }
+
+        public override TElem GetElementByTag<TElem>(string tag)
+        {
+            if (this.tag == tag)
+                return this as TElem;
+            return null;
+        }
+
+        public override TElem[] GetAllElementsByTag<TElem>(string tag)
+        {
+            var e = GetElementByTag<TElem>(tag);
+            if (e != null)
+                return new TElem[] { e };
+            return null;
         }
     }
 
@@ -97,7 +124,36 @@ namespace RTS
         public bool IsChild(EditorUIBase child) { return child.Equals(this.child); }
         public EditorUIBase GetChild() { return child; }
 
-        public static T operator +(EditorUISingleChild<T> parent, EditorUIBase child) { parent.child = child; return parent as T; }
+        public static T operator +(EditorUISingleChild<T> parent, EditorUIBase child) { parent.child = child; child.parent = parent; return parent as T; }
+        public override sealed void FixInheritance(EditorUIBase parent) { base.FixInheritance(parent); child?.FixInheritance(this); }
+
+        public override TElem GetElementByTag<TElem>(string tag)
+        {
+            if (this.tag == tag)
+                return this as TElem;
+            else if (child != null)
+                return child.GetElementByTag<TElem>(tag);
+            else return null;
+        }
+
+        public override TElem[] GetAllElementsByTag<TElem>(string tag)
+        {
+            List<TElem> elems = new List<TElem>();
+            if(this.tag == tag && this is TElem te)
+            {
+                elems.Add(te);
+            }
+
+            if (child != null)
+            {
+                var elem = child.GetAllElementsByTag<TElem>(tag);
+                if (elem != null)
+                    elems.AddRange(elem);
+            }
+            if (elems.Count == 0)
+                return null;
+            else return elems.ToArray();
+        }
     }
 
     public abstract class EditorUIMultiChild<T> : EditorUI<T> where T : class
@@ -120,8 +176,44 @@ namespace RTS
         public bool IsChild(EditorUIBase child) { return children.Contains(child); }
         public EditorUIBase GetChild(int index) { if (children.Count > index && index >= 0) return children[index]; return null; }
         public CT GetFirstChild<CT>() where CT : EditorUIBase { return children.Find((EditorUIBase ui) => { return ui is CT; }) as CT; }
-        public static T operator +(EditorUIMultiChild<T> parent, EditorUIBase child) { parent.children.Add(child); return parent as T; }
-        public static T operator -(EditorUIMultiChild<T> parent, EditorUIBase child) { parent.children.Remove(child); return parent as T; }
+        public static T operator +(EditorUIMultiChild<T> parent, EditorUIBase child) { parent.children.Add(child);child.parent = parent; return parent as T; }
+        public static T operator -(EditorUIMultiChild<T> parent, EditorUIBase child) { parent.children.Remove(child);child.parent = null; return parent as T; }
+        public override sealed void FixInheritance(EditorUIBase parent) { base.FixInheritance(parent); foreach(var child in children)child?.FixInheritance(this); }
+
+
+        public override TElem GetElementByTag<TElem>(string tag)
+        {
+            if (this.tag == tag)
+                return this as TElem;
+            else
+            {
+                foreach(var elem in children)
+                {
+                    TElem elemFound = elem.GetElementByTag<TElem>(tag);
+                    if (elemFound != null)
+                        return elemFound;
+                }
+            }
+            return null;
+        }
+
+        public override TElem[] GetAllElementsByTag<TElem>(string tag)
+        {
+            List<TElem> elems = new List<TElem>();
+            if (this.tag == tag && this is TElem te)
+                elems.Add(te);
+
+            foreach(var elem in children)
+            {
+                var elemsFound = elem.GetAllElementsByTag<TElem>(tag);
+                if (elemsFound != null)
+                    elems.AddRange(elemsFound);
+            }
+
+            if (elems.Count == 0)
+                return null;
+            return elems.ToArray();
+        }
     }
 
     public class ESpacer : EditorUI<ESpacer>
@@ -232,8 +324,13 @@ namespace RTS
         #endregion
 
         #region Functions
-        public ESwitchTab ActivateTab(int index) { this.activeIndex = index;changed = true; return this; }
+        public ESwitchTab ActivateTab(int index) { this.activeIndex = index;changed = true;cb_ActivateTab?.Invoke(this, index); return this; }
         public int ActivatedTab() { return activeIndex; }
+        #endregion
+
+        #region Events
+        Action<ESwitchTab, int> cb_ActivateTab;
+        public ESwitchTab OnActivateTab(Action<ESwitchTab, int> callback) { cb_ActivateTab = callback; return this; }
         #endregion
     }
 
@@ -261,7 +358,9 @@ namespace RTS
 
             if (adaptive)
             {
-                this.position.height = fixedHeight;
+                var p = this.position;
+                p.height = fixedHeight;
+                this.position = p;
                 relativeHeight = 0;
                 GUI.BeginClip(position);
             }
@@ -348,7 +447,7 @@ namespace RTS
 
     public class EVerticalSplitView : EditorUI<EVerticalSplitView>
     {
-        EditorUIBase uchild, lchild;
+        protected EditorUIBase uchild, lchild;
         float uHeight = 1, lHeight = 1, handleWidth = 8;
         bool uRelativeHeight = true, lRelativeHeight = true;
         Rect viewArea = new Rect(0, 0, 0, 0);
@@ -439,22 +538,40 @@ namespace RTS
             }
             return false;
         }
-        public EditorUIBase GetLChild(int index) { return uchild; }
-        public EditorUIBase GetRChild(int index) { return lchild; }
+        public EditorUIBase GetUChild(int index) { return uchild; }
+        public EditorUIBase GetLChild(int index) { return lchild; }
         public EVerticalSplitView RemoveUChild(int index) { uchild = null; return this; }
         public EVerticalSplitView RemoveLChild(int index) { lchild = null; return this; }
-        public static EVerticalSplitView operator +(EVerticalSplitView parent, EditorUIBase child) { if (parent.uchild == null) parent.uchild = child; else parent.lchild = child; return parent; }
+        public static EVerticalSplitView operator +(EVerticalSplitView parent, EditorUIBase child)
+        {
+            if (parent.uchild == null)
+            {
+                parent.uchild = child;
+            }
+            else
+            {
+                parent.lchild = child;
+            }
+            child.parent = parent;
+            return parent;
+        }
         public static EVerticalSplitView operator -(EVerticalSplitView parent, EditorUIBase child)
         {
             if (parent.uchild != null)
             {
                 if (parent.uchild.Equals(child))
+                {
                     parent.uchild = null;
+                    child.parent = null;
+                }
             }
             else if (parent.lchild != null)
             {
                 if (parent.lchild.Equals(child))
+                {
                     parent.lchild = null;
+                    child.parent = null;
+                }
             }
             return parent;
         }
@@ -509,6 +626,49 @@ namespace RTS
                     break;
             }
         }
+
+        public override TElem GetElementByTag<TElem>(string tag)
+        {
+            {
+                var e = base.GetElementByTag<TElem>(tag);
+
+                if (e != null) return e;
+            }
+
+            {
+                var e = lchild?.GetElementByTag<TElem>(tag);
+
+                if (e != null) return e;
+            }
+
+            {
+                var e = uchild?.GetElementByTag<TElem>(tag);
+
+                if (e != null) return e;
+            }
+            return null;
+        }
+
+        public override TElem[] GetAllElementsByTag<TElem>(string tag)
+        {
+            List<TElem> elems = new List<TElem>();
+            if (this.tag == tag && this is TElem te)
+                elems.Add(te);
+            if (uchild != null)
+            {
+                var ue = uchild.GetAllElementsByTag<TElem>(tag);
+                if (ue != null)
+                    elems.AddRange(ue);
+            }
+
+            if (lchild != null)
+            {
+                var le = lchild.GetAllElementsByTag<TElem>(tag);
+                if (le != null)
+                    elems.AddRange(le);
+            }
+            return elems.Count > 0 ? elems.ToArray() : null;
+        }
     }
 
     public class EHorizontalLayout : EditorUIMultiChild<EHorizontalLayout>
@@ -532,7 +692,9 @@ namespace RTS
             }
             if (adaptive)
             {
-                this.position.width = fixedWidth;
+                var p = this.position;
+                p.width = fixedWidth;
+                this.position = p;
                 relativeWidth = 0;
                 GUI.BeginClip(position);
             }
@@ -595,7 +757,7 @@ namespace RTS
 
     public class EHorizontalSplitView : EditorUI<EHorizontalSplitView>
     {
-        EditorUIBase lchild, rchild;
+        protected EditorUIBase lchild, rchild;
         float lWidth = 1, rWidth = 1, handleWidth = 8;
         bool lRelativeWidth = true, rRelativeWidth = true;
         Rect viewArea = new Rect(0, 0, 0, 0);
@@ -685,18 +847,36 @@ namespace RTS
         public EditorUIBase GetRChild(int index) { return rchild; }
         public EHorizontalSplitView RemoveLChild(int index) { lchild = null; return this; }
         public EHorizontalSplitView RemoveRChild(int index) { rchild = null; return this; }
-        public static EHorizontalSplitView operator +(EHorizontalSplitView parent, EditorUIBase child) { if (parent.lchild == null) parent.lchild = child; else parent.rchild = child; return parent; }
+        public static EHorizontalSplitView operator +(EHorizontalSplitView parent, EditorUIBase child)
+        {
+            if (parent.lchild == null)
+            {
+                parent.lchild = child; 
+            }
+            else
+            {
+                parent.rchild = child;
+            }
+            child.parent = null;
+            return parent;
+        }
         public static EHorizontalSplitView operator -(EHorizontalSplitView parent, EditorUIBase child)
         {
             if (parent.lchild != null)
             {
                 if (parent.lchild.Equals(child))
+                {
                     parent.lchild = null;
+                    child.parent = null;
+                }
             }
             else if(parent.rchild != null)
             {
                 if (parent.rchild.Equals(child))
+                {
                     parent.rchild = null;
+                    child.parent = null;
+                }
             }
             return parent;
         }
@@ -752,9 +932,52 @@ namespace RTS
                     break;
             }
         }
+
+        public override TElem GetElementByTag<TElem>(string tag)
+        {
+            {
+                var e = base.GetElementByTag<TElem>(tag);
+
+                if (e != null) return e;
+            }
+
+            {
+                var e = lchild?.GetElementByTag<TElem>(tag);
+
+                if (e != null) return e;
+            }
+
+            {
+                var e = rchild?.GetElementByTag<TElem>(tag);
+
+                if (e != null) return e;
+            }
+            return null;
+        }
+
+        public override TElem[] GetAllElementsByTag<TElem>(string tag)
+        {
+            List<TElem> elems = new List<TElem>();
+            if (this.tag == tag && this is TElem te)
+                elems.Add(te);
+            if (lchild != null)
+            {
+                var le = lchild.GetAllElementsByTag<TElem>(tag);
+                if (le != null)
+                    elems.AddRange(le);
+            }
+
+            if (rchild != null)
+            {
+                var re = rchild.GetAllElementsByTag<TElem>(tag);
+                if (re != null)
+                    elems.AddRange(re);
+            }
+            return elems.Count > 0 ? elems.ToArray() : null;
+        }
     }
 
-    public class EWindowView : EditorUIBase
+    public class EWindowView : EditorUI<EWindowView>
     {
         EditorUIBase child;
         float hHandleWidth = 4, vHandleWidth = 4;
@@ -772,8 +995,10 @@ namespace RTS
             //Calculate child size if adaptive
             if (adaptive && child != null && !child.relativeSize)
             {
-                this.position.width = child.position.width;
-                this.position.height = child.position.height;
+                var p = this.position;
+                p.width = child.position.width;
+                p.height = child.position.height;
+                this.position = p;
             }
             //Draw title
             if(Event.current.type == EventType.Repaint)
@@ -797,10 +1022,7 @@ namespace RTS
             child?.OnDisable(window);
         }
         #region LayoutOptions
-        public EWindowView Width(float w) { position.width = w; return this; }
-        public EWindowView Height(float h) { position.height = h; return this; }
-        public EWindowView RelativeSize(bool isRelative) { this.relativeSize = isRelative; return this; }
-        public EWindowView RelativePosition(bool isRelative) { this.relativePos = isRelative; return this; }
+
         public EWindowView HResizable(bool enable) { adaptive = enable; return this; }
         public EWindowView VResizable(bool enable) { adaptive = enable; return this; }
         public EWindowView Movable(bool enable) { adaptive = enable; return this; }
@@ -923,7 +1145,7 @@ namespace RTS
 
     public class EButton : EditorUISingleChild<EButton>
     {
-        public Action callback;
+        //public Action callback;
 
         public override void OnDrawGUI(Rect position, EditorWindow window)
         {
@@ -941,9 +1163,9 @@ namespace RTS
             //bool pressed = GoodButton(position, GUIContent.none,window);
             HandleInput(position, window, clickCallback:()=>
             {
-                if (isMouseOver && isEnabled && callback != null)
+                if (isMouseOver && isEnabled && cb_Clicked != null)
                 {
-                    callback();
+                    cb_Clicked(this);
                 }
             });
 
@@ -963,10 +1185,13 @@ namespace RTS
 
 
         #region Function
-        public EButton Callback(Action callback) { this.callback += callback; return this; }
+        //public EButton OnClicked(Action callback) { this.callback += callback; return this; }
         #endregion
 
-
+        #region Events
+        Action<EButton> cb_Clicked;
+        public EButton OnClicked(Action<EButton> callback) { cb_Clicked = callback; return this; }
+        #endregion
         bool GoodButton(Rect bounds, GUIContent caption, EditorWindow window)
         {
             
@@ -1033,12 +1258,12 @@ namespace RTS
     public class ETextInputField : EditorUI<ETextInputField>
     {
         string content;
-        Action<string> inputUpdated;
+        Action<ETextInputField,string> cb_OnInputUpdate;
 
         public override void OnDrawGUI(Rect position, EditorWindow window)
         {
             content = GUI.TextField(position, content);
-            inputUpdated?.Invoke(content);
+            cb_OnInputUpdate?.Invoke(this,content);
             //Debug.Log(content);
         }
 
@@ -1049,7 +1274,7 @@ namespace RTS
 
         #region Function
         public ETextInputField Content(string content) { this.content = content; return this; }
-        public ETextInputField Callback(Action<string> update) { this.inputUpdated = update; return this; }
+        public ETextInputField OnInputUpdate(Action<ETextInputField,string> update) { this.cb_OnInputUpdate = update; return this; }
         #endregion
     }
 
@@ -1136,7 +1361,7 @@ namespace RTS
     {
         string[] contents = new string[] { "Empty"};
         int selected = 0;
-        Action<int> callback;
+        Action<EPopup,int> cb_OnSelectionChange;
         Func<string[]> updateContent;
 
         public override void OnDrawGUI(Rect position, EditorWindow window)
@@ -1153,7 +1378,7 @@ namespace RTS
             int s = EditorGUI.Popup(position, selected, contents);
             if(s != selected)
             {
-                callback?.Invoke(selected);
+                cb_OnSelectionChange?.Invoke(this,s);
                 selected = s;
             }
         }
@@ -1165,7 +1390,7 @@ namespace RTS
         #region Function
         public EPopup Content(string[] content) { this.contents = content; return this; }
         public string GetString(int index) { if (index >= 0 && index < contents.Length) return contents[index];return null; }
-        public EPopup Callback(Action<int> callback) { this.callback = callback; return this; }
+        public EPopup OnSelectionChange(Action<EPopup,int> callback) { this.cb_OnSelectionChange = callback; return this; }
         public EPopup BindContent(Func<string[]> update) { this.updateContent = update; return this; }
         #endregion
     }
@@ -1177,7 +1402,8 @@ namespace RTS
         Func<T,bool> callback;
 
         public EObjectField(){
-            position.height = 16;
+            Height(16);
+            
         }
 
         public override void OnDrawGUI(Rect position, EditorWindow window)
@@ -1553,5 +1779,274 @@ namespace RTS
         public EToolBar CallBack(Action<int> callback) { this.callback = callback; return this; }
         public EToolBar Content(GUIContent[] contents) { this.contents = contents; return this; }
         #endregion
+    }
+
+    public class EObjectPropertyEditor : EditorUI<EObjectPropertyEditor>
+    {
+        Rect _position;
+        internal override Rect position {
+            get{
+                if (adaptive)
+                {
+                    var p = new Rect(_position);
+                    p.height = CalculateHeight(objToEdit);
+                    return p;
+                }
+                else
+                    return _position;
+            }
+
+            set { _position = value; } }
+
+        float fieldHeight = 16;
+        bool adaptive = true;
+        object objToEdit;
+        //System.Reflection.FieldInfo[] props;
+        public EObjectPropertyEditor(object o)
+        {
+            objToEdit = o;
+            //props = o.GetType().GetFields();
+        }
+
+        public EObjectPropertyEditor()
+        {
+
+        }
+
+        public override void OnDrawGUI(Rect position, EditorWindow window)
+        {
+            Rect drawArea = new Rect();
+            drawArea.height = fieldHeight;
+
+            float ind = 10;
+
+            List<object> displayedObjs = new List<object>();
+
+            void DrawEditor(int indentation, object o)
+            {
+                if (o == null) return;
+                if (displayedObjs.Contains(o)) return;
+                displayedObjs.Add(o);
+
+                //calculation
+                float indCell = indentation * ind;
+                float labelCell = position.width / 2 - indCell;
+                float editorCell = position.width / 2;
+
+                var fieldInfo = o.GetType().GetFields();
+                for (int i = 0; i < fieldInfo.Length; i++)
+                {
+                    object fieldValue = fieldInfo[i].GetValue(o);
+
+                    //Draw field name
+                    drawArea.x = indCell;
+                    drawArea.width = labelCell;
+                    EditorGUI.LabelField(drawArea, fieldInfo[i].Name);
+
+                    //Set up value editor draw rect
+                    drawArea.x += labelCell;
+                    drawArea.width = editorCell;
+
+                    if (fieldInfo[i].IsLiteral || fieldInfo[i].IsInitOnly || fieldValue == null)
+                    {
+                        //Display readonly
+                        if(fieldValue != null)
+                        {
+                            EditorGUI.LabelField(drawArea, fieldValue.ToString());
+                        }
+                    }
+                    else
+                    {
+                        //Display editor
+
+                        var editor = GetFieldEditor(fieldValue.GetType());
+                        if (editor != null)
+                        {
+                            object newVal = editor.Invoke(drawArea, fieldValue);
+
+                            fieldInfo[i].SetValue(o, newVal);
+                        }
+                        else
+                        {
+                            //Reset drawArea position
+                            drawArea.y += fieldHeight;
+                            DrawEditor(indentation + 1, fieldValue);
+                            continue;
+                        }
+
+                    }
+
+                    //Reset drawArea position
+                    drawArea.y += fieldHeight;
+                }
+            }
+
+            GUI.BeginClip(position);
+            DrawEditor(0, objToEdit);
+            GUI.EndClip();
+        }
+
+        #region Layout
+        public EObjectPropertyEditor AdaptiveHeight(bool enableAdapt) { adaptive = enableAdapt; return this; }
+        public EObjectPropertyEditor FieldHeight(float h) { fieldHeight = h; return this; }
+        #endregion
+
+        public EObjectPropertyEditor BindObject(object o) { objToEdit = o; return this; }
+
+        float CalculateHeight(object obj)
+        {
+            List<object> visitedObjs = new List<object>();
+            visitedObjs.Add(obj);
+            //int basicFieldNum = 0;
+
+            int CountFieldNum(object o)
+            {
+                if (o == null) return 0;
+                
+                var fields = o.GetType().GetFields();
+                int count = fields.Length;
+                foreach (var item in fields)
+                {
+                    if (GetFieldEditor(item.FieldType) == null)
+                    {
+                        object subObj = item.GetValue(o);
+                        if (!visitedObjs.Contains(subObj))
+                        {
+                            visitedObjs.Add(subObj);
+                            count += CountFieldNum(subObj);
+                        }
+                    }
+                    else
+                    {
+                        //count++;
+                    }
+                }
+
+                return count;
+            }
+
+            return CountFieldNum(obj) * fieldHeight;
+        }
+
+        Func<Rect,object,object> GetFieldEditor(Type fieldType)
+        {
+            if (fieldType == null) return null;
+
+            if(fieldType.IsSubclassOf(typeof(GameObject)))
+            {
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.ObjectField(r,b as UnityEngine.Object,fieldType,false );
+                };
+            }
+            if(fieldType == typeof( Bounds))
+                return (Rect r, object b) => {
+                    return EditorGUI.BoundsField(r, (Bounds)b);
+                };
+            if (fieldType == typeof(BoundsInt))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.BoundsIntField(r, (BoundsInt)b);
+                };
+            if (fieldType == typeof(Color))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.ColorField(r, (Color)b);
+                };
+            if (fieldType == typeof(AnimationCurve))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.CurveField(r, (AnimationCurve)b);
+                };
+            if (fieldType == typeof(double))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.DoubleField(r, (double)b);
+                };
+            if (fieldType.BaseType == typeof(Enum))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.EnumPopup(r, (Enum)b);
+                };
+            if (fieldType == typeof(float))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.FloatField(r, (float)b);
+                };
+            if (fieldType == typeof(Gradient))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.GradientField(r, (Gradient)b);
+                };
+            if (fieldType == typeof(int))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.IntField(r, (int)b);
+                };
+            /*if (t == typeof(BoundsInt))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.LayerField(r, (AnimationCurve)b);
+                };*/
+            if (fieldType == typeof(long))
+                return (Rect r, object b) =>
+                {
+                    return EditorGUI.LongField(r, (long)b);
+                };
+            /*if (t == typeof(BoundsInt))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.MaskField(r, (AnimationCurve)b);
+                };*/
+            if (fieldType == typeof(Rect))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.RectField(r, (Rect)b);
+                };
+            if (fieldType == typeof(RectInt))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.RectIntField(r, (RectInt)b);
+                };
+            /*if (t == typeof(string))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.TagField(r, (string)b);
+                };*/
+            if (fieldType == typeof(string))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.TextField(r, (string)b);
+                };
+            if (fieldType == typeof(Vector2))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.Vector2Field(r,"", (Vector2)b);
+                };
+            if (fieldType == typeof(Vector2Int))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.Vector2IntField(r,"", (Vector2Int)b);
+                };
+            if (fieldType == typeof(Vector3))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.Vector3Field(r,"", (Vector3)b);
+                };
+            if (fieldType == typeof(Vector3Int))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.Vector3IntField(r, "",(Vector3Int)b);
+                };
+            if (fieldType == typeof(Vector4))
+                return (Rect r, object b) =>
+                {
+                   return EditorGUI.Vector4Field(r,"", (Vector4)b);
+                };
+
+            return null;
+        
+            
+        }
     }
 }

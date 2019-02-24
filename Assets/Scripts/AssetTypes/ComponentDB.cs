@@ -20,14 +20,44 @@ namespace RTS.AssetTypes
     {
         public string pageName;
         public int DBIndex;
-        public List<RTSComponentInfoHolder> componentList = new List<RTSComponentInfoHolder>();
+        public List<RTSComponentInfo> componentList = new List<RTSComponentInfo>();
     }
 
+
+
     [System.Serializable]
-    public class RTSComponentInfoHolder
+    public class RTSComponentInfo
     {
-        public string ComponentName;
+        public enum ComponentType
+        {
+            Root,
+            Special,
+            Utility,
+            Weapon
+        }
+
+        public ComponentType type;
+
+        public RTSComponentAimingData aimingData;
+
+        public string name;
         public GameObject prefab;
+    }
+
+    public enum ComponentAimingType
+    {
+        Fixed,
+        Turret,
+        Omnidirectional
+    }
+
+    public class RTSComponentAimingData
+    {
+        public ComponentAimingType aimingType;
+        public float aimingAngle;
+        public float horizontalRotationSpeed;
+        public float verticalRotationSpeed;
+        public object movementMetadata;
     }
 
 }
